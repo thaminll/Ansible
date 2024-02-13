@@ -1,0 +1,103 @@
+---
+- name: transfer psql file
+  copy:
+    src: postgres12.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-psql ]
+
+- name: install postgres
+  command: /home/ansible/scripts/postgres12.sh
+  tags: [ install-psql ]
+
+#- name: transfer postgresql file
+#  copy:
+#    src: postgresql-12.17.tar.gz
+#    dest: /home/ansible/scripts/
+#    mode: 0777
+#  tags: [ transfer-postgres ]
+
+- name: update postgresql apt package
+  copy:
+    content: "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main\n"
+    dest: /etc/apt/sources.list.d/pgdg.list
+    owner: root
+    group: root
+    mode: 0644
+  tags: [ update-psql-pkg ]
+
+- name: Import PostgreSQL repository signing key
+  shell: wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+  tags: [ rep-signkey-psql ]
+
+- name: install python3
+  become: yes
+  apt:
+    name: python3-apt
+    state: present
+  tags: [ install-py3 ]
+
+- name: Update package lists and install PostgreSQL12
+  apt:
+    update_cache: yes
+    name: postgresql-12 && postgresql-client-12
+    state: present
+  tags: [ install-psql2 ]
+
+- name: Postgresql config changes
+  lineinfile:
+    path: /usr/local/pgsql/data/postgresql.conf
+    regexp: '^#listen_addresses = '
+    line: "listen_addresses = '{{ hostvars[inventory_hostname]['ansible_host'] }}'"
+  notify:
+        - restart postgresql
+  tags: [ postgres-config ]
+
+- name: change default port of postgresql
+  lineinfile:
+    path: /usr/local/pgsql/data/postgresql.conf
+    regexp: '^port ='
+    line: 'port = 5454'
+  notify:
+        - restart postgresql
+  tags: [ pg-port ]
+
+- name: Change PostgreSQL port in pg_hba.conf
+  lineinfile:
+    path: /usr/local/pgsql/data/pg_hba.conf
+    regexp: '^host\s+all\s+all\s+127\.0\.0\.1/32\s+md5'
+    line: 'host    all             all             0.0.0.0/0               md5'
+  notify:
+        - restart postgresql
+  tags: [ port-change-pghba ]
+
+- name: Install psycopg2
+  apt:
+    name: python3-psycopg2
+    state: present
+  tags: [ psy ]
+
+- name: create posgres database
+  postgresql_db:
+    name: "{{ item.name }}"
+    login_host: "{{ item.login_host }}"
+    login_port: "{{ item.port }}"
+    login_user: "{{ item.admin_user }}"
+    login_password: "{{ item.admin_password }}"
+    state: present
+  with_items: "{{ db }}"
+  tags: [ create-db ]
+
+- name: create postgres user
+  postgresql_user:
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    login_host: "{{ item.login_host }}"
+    login_port: "{{ item.port }}"
+    login_user: "{{ item.admin_user }}"
+    login_password: "{{ item.admin_password }}"
+    login_db: "{{ item.database }}"
+    state: present
+  with_items: "{{ db }}"
+  tags: [ create-db_user ]
+

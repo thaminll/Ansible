@@ -1,0 +1,28 @@
+---
+
+- name: Include tasks for user
+  include_tasks: user_config.yml
+
+- name: Include tasks for Elasticsearch
+  include_tasks: elasticsearch.yml
+
+- name: Include tasks for PostgreSQL
+  include_tasks: postgresql.yml
+
+
+- name: Include tasks for Redis
+  include_tasks: redis.yml
+
+
+- name: Include tasks for monitoring(prometheus, node_exporter)
+  include_tasks: monitoring.yml
+
+- name: Include tasks for RabbitMQ
+  include_tasks: rabbitmq.yml
+
+- name: Include tasks for Kafka
+  include_tasks: kafka.yml
+
+
+
+

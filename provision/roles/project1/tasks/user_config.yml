@@ -1,0 +1,32 @@
+---
+- name: add user with ssh key
+  user:
+    name: "{{ item.name }}"
+    state: present
+    createhome: yes
+  with_items: "{{ users }}"
+  tags: [create-user]
+
+- name: Add SSH-KEY
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_key }}"
+  with_items: "{{ users }}"
+  tags: [ add-ssh-key ]
+
+- name: Delete users
+  user:
+    name: "{{ item }}"
+    state: absent
+  with_items: "{{ deleted_users }}"
+  tags: [ delete-user ]
+
+- name: SSH config changes
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.old }}"
+    line: "{{ item.new }}"
+  with_items: "{{ ssh_config }}"
+  notify:
+    -  Restart ssh service
+  tags: [ssh-config-changing ]

@@ -1,0 +1,36 @@
+---
+- name: transfer kafka
+  copy:
+    src: kafka-installation.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-kafka ]
+
+- name: install kafka
+  command: /home/ansible/scripts/kafka-installation.sh
+  tags: [ install-kafka ]
+
+- name: configure zookeeper
+  lineinfile:
+    path: /opt/kafka/config/zookeeper.properties
+    line: "{{ item.server }}"
+    insertafter: "^clientPort=2181"
+    state: present
+  with_items: "{{ zookeeper }}"
+  notify:
+        - restart zookeeper
+        - restart kafka
+  tags: [ zk-conf ]
+
+- name: configure kafka
+  lineinfile:
+    path: /opt/kafka/config/server.properties
+    line: "{{ item.data }}"
+    state: present
+  with_items: "{{ kafka }}"
+  notify:
+        - restart zookeeper
+        - restart kafka
+  tags: [ k-conf ]
+
+

@@ -1,0 +1,72 @@
+---
+
+users:
+  - name: 'ansible'
+    ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC36ccZc/a2sX/HQU4gf06uZHKB0u/a3lLFRMHfI.... thamin@ansible"
+
+deleted_users:
+  - "user2"
+
+ssh_config:
+  - old: '^#?Port\s'
+#    new: " Port 2222"
+    new: " Port 22"
+  - old: '^#?PermitRootLogin\s'
+   # new: 'PermitRootLogin no'
+    new: 'PermitRootLogin yes'
+
+  - old: '^#?PasswordAuthentication\s'
+  #  new: 'PasswordAuthentication no'
+    new: 'PasswordAuthentication yes'
+
+zookeeper:
+  - server: "server.1=[ip]:2181:2188"
+  - server: "server.2=[ip]:2181:2188"
+
+kafka:
+  - data: "listeners=PLAINTEXT://'{{hostvars[inventory_hostname]['ansible_host'] }}':9092"
+  - data: "advertised.listeners=PLAINTEXT://'{{hostvars[inventory_hostname]['ansible_host'] }}':9092"
+  - data: "zookeeper.connect=[ip]:2181,[ip]:2181"
+
+db:
+  - name: "info"
+    login_host: "<host_ip>"
+    port: "5454"
+    admin_user: "postgres"
+    admin_password: "<admin-pass>"
+    user: "<username>"
+    password: "<pass>"
+    database: "<database_name>"
+
+redis_password:
+  - "requirepass 1234"
+
+rabbitmq_config:
+  - old: '^#NODE_IP_ADDRESS=127.0.0.1'
+    new: "NODE_IP_ADDRESS={{hostvars[inventory_hostname]['ansible_host'] }}"
+
+  - old: '^#NODE_PORT=5672'
+    new: 'NODE_PORT=15672'
+
+rabbitmq:
+  - user: "thamin"
+    password: "123"
+    vhost: /
+    queue: "first"
+    exchange: "first"
+    binding: "first_binding"
+    destination: "first"
+    binding_type: "queue"
+    routing_key: ""
+
+elasticsearch:
+  - /usr/share/elasticsearch/bin/elasticsearch-plugin install -b analysis-icu
+  - /usr/share/elasticsearch/bin/elasticsearch-plugin install -b analysis-phonetic
+  - /usr/share/elasticsearch/bin/elasticsearch-plugin install -b analysis-kuromoji
+  - /usr/share/elasticsearch/bin/elasticsearch-plugin install -b analysis-smartcn
+  - /usr/share/elasticsearch/bin/elasticsearch-plugin install -b analysis-stempel
+
+elastic_users:
+  - name: "thamin"
+    password: "1234"
+    roles: 'superuser'

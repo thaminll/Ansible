@@ -1,0 +1,6 @@
+---
+- hosts: myhosts
+  become: yes
+  roles:
+    - project1
+

@@ -1,0 +1,48 @@
+---
+- name: install rabbitmq
+  apt:
+    update_cache: yes
+    name: rabbitmq-server
+  notify:
+    - start rabbitmq
+    - enable rabbitmq
+  tags: [ install-rabbitmq ]
+
+- name: creating user in rabbitmq
+  rabbitmq_user:
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    tags: "administrator"
+    vhost: "{{ item.vhost }}"
+  with_items: "{{ rabbitmq }}"
+  tags: [ rabbitmq-user ]
+
+- name: rabbitmq config
+  lineinfile:
+    path: /etc/rabbitmq/rabbitmq-env.conf
+    regexp: '{{ item.old }}'
+    line: "{{ item.new }}"
+  with_items: "{{ rabbitmq_config }}"
+  tags: [ rabbitmq-config ]
+
+- name: Declare a RabbitMQ Queue
+  rabbitmq_queue:
+    name: "{{ item.queue }}"
+    vhost: "{{ item.vhost }}"
+    login_host: "{{hostvars[inventory_hostname]['ansible_host'] }}"
+    durable: yes
+    state: present
+  with_items: "{{ rabbitmq }}"
+  tags: [ rabbitmq-queue ]
+
+- name: Declare a RabbitMQ exchange
+  rabbitmq_exchange:
+    name: "{{ item.exchange }}"
+    vhost: "{{ item.vhost }}"
+    login_host: "{{hostvars[inventory_hostname]['ansible_host'] }}"
+    durable: yes
+    state: present
+  with_items: "{{ rabbitmq }}"
+  tags: [ rabbitmq-exchange ]
+
+

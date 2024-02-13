@@ -1,0 +1,26 @@
+---
+- name: install redis
+  apt:
+    update_cache: yes
+    name: redis-server
+    state: present
+  notify:
+    - start redis
+    - enable redis
+  tags: [ install-redis ]
+
+
+- name: redis-server config changes
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^bind'
+    line: "bind {{ hostvars[inventory_hostname]['ansible_host'] }}"
+  tags: [ redis-config ]
+
+- name: redis password
+  lineinfile:
+    path: /etc/redis/redis.conf
+    line: "{{ item }}"
+  with_items: "{{ redis_password }}"
+  tags: [ redis-pass ]
+

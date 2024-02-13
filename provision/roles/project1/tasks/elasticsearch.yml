@@ -1,0 +1,51 @@
+---
+#- name: transfer elastic file
+#  copy:
+#    src: elasticsearch-8.12.0-amd64.deb
+#    dest: /home/ansible/scripts
+#    mode: 0777
+#  tags: [ transfer-el-file ]
+
+- name: transfer elasticsearch
+  copy:
+    src: elasticsearch.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-elasticsearch ]
+
+- name: install elasticsearch
+  apt:
+    deb: /home/ansible/scripts/elasticsearch-8.12.0-amd64.deb
+    state: present
+  notify:
+    - start elastic
+    - enable elastic
+  tags: [ install-elasticsearch ]
+
+- name: elasticsearch config changes
+  lineinfile:
+    path: /etc/elasticsearch/elasticsearch.yml
+    regexp: '^#network.host: 192.168.0.1'
+    line: "network.host: {{ hostvars[inventory_hostname]['ansible_host'] }}"
+  notify:
+    - restart elastic
+  tags: [ elastic-config ]
+
+- name: elasticsearch config changes
+  lineinfile:
+    path: /etc/elasticsearch/jvm.options
+    regexp: '^## -Xms4g'
+    line: '-Xms2g'
+  notify:
+    - restart elastic
+  tags: [ elastic-config2 ]
+
+- name: elastic password
+  shell: >
+    curl -X POST "http://ip:9200/_security/user/elastic/_password"
+    -H 'Content-Type: application/json'
+    -d '{"password": "qazwsx"}'
+  tags: [elastic_pass]
+  notify:
+    - restart elastic
+  tags: [ user ]

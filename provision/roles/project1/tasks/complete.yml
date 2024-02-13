@@ -1,0 +1,356 @@
+---
+
+########
+
+- name: add user with ssh key
+  user:
+    name: "{{ item.name }}"
+    state: present
+    createhome: yes
+  with_items: "{{ users }}"
+  tags: [create-user]
+
+- name: Add SSH-KEY
+  authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_key }}"
+  with_items: "{{ users }}"
+  tags: [ add-ssh-key ]
+
+- name: Delete users
+  user:
+    name: "{{ item }}"
+    state: absent
+  with_items: "{{ deleted_users }}"
+  tags: [ delete-user ]
+
+- name: SSH config changes
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.old }}"
+    line: "{{ item.new }}"
+  with_items: "{{ ssh_config }}"
+  notify:
+    -  Restart ssh service
+  tags: [ssh-config-changing ]
+
+########
+
+- name: transfer prometheus file
+  copy:
+    src: prometheus-installation.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-prometheus ]
+
+- name: install prometheus
+  command: /home/ansible/scripts/prometheus-installation.sh
+  tags: [ install-prometheus ]
+
+- name: config change in prometheus.yml
+  lineinfile:
+    path: /etc/prometheus/prometheus.yml  # Replace with the actual path to your Prometheus configuration file
+    regexp: '^(\s+- targets:\s+)\["localhost:9090"\]'
+    line: '      - targets: ["172.31.0.126:9091"]'
+  notify: restart prometheus
+  tags: [ prometheus-config ]
+
+- name: transfer node-exporter
+  copy:
+    src: node_exporter.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-node_exporter ]
+
+- name: install node-exporter
+  command: /home/ansible/scripts/node_exporter.sh
+  tags: [ install-node_exporter ]
+
+- name: node_exporter port change
+  lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    regexp: '^#  --web.listen-address=":9100"'
+    line: '  --web.listen-address=":9101"'
+  notify: restart node_exporter
+  tags: [ ne-config ]
+
+- name: add node_exporter job to prometheus.yml
+  lineinfile:
+    path: /etc/prometheus/prometheus.yml
+    line: |
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['172.31.0.126:9101']
+    state: present
+  notify: restart prometheus
+  tags: [ prometheus-job ]
+
+########
+
+- name: transfer kafka
+  copy:
+    src: kafka-installation.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-kafka ]
+
+- name: install kafka
+  command: /home/ansible/scripts/kafka-installation.sh
+  tags: [ install-kafka ]
+
+- name: configure zookeeper
+  lineinfile:
+    path: /opt/kafka/config/zookeeper.properties
+    line: "{{ item.server }}"
+    insertafter: "^clientPort=2181"
+    state: present
+  with_items: "{{ zookeeper }}"
+  notify:
+        - restart zookeeper
+        - restart kafka
+  tags: [ zk-conf ]
+
+- name: configure kafka
+  lineinfile:
+    path: /opt/kafka/config/server.properties
+    line: "{{ item.data }}"
+    state: present
+  with_items: "{{ kafka }}"
+  notify:
+        - restart zookeeper
+        - restart kafka
+  tags: [ k-conf ]
+
+#######
+
+- name: transfer psql file
+  copy:
+    src: postgres12.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-psql ]
+
+- name: install postgres
+  command: /home/ansible/scripts/postgres12.sh
+  tags: [ install-psql ]
+
+- name: transfer postgresql file
+  copy:
+    src: postgresql-12.17.tar.gz
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-postgres ]
+
+- name: update postgresql apt package
+  copy:
+    content: "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main\n"
+    dest: /etc/apt/sources.list.d/pgdg.list
+    owner: root
+    group: root
+    mode: 0644
+  tags: [ update-psql-pkg ]
+
+- name: Import PostgreSQL repository signing key
+  shell: wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+  tags: [ rep-signkey-psql ]
+
+- name: install python3
+  become: yes
+  apt:
+    name: python3-apt
+    state: present
+  tags: [ install-py3 ]
+
+- name: Update package lists and install PostgreSQL12
+  apt:
+    update_cache: yes
+    name: postgresql-12 && postgresql-client-12
+    state: present
+  tags: [ install-psql2 ]
+
+- name: Postgresql config changes
+  lineinfile:
+    path: /usr/local/pgsql/data/postgresql.conf
+    regexp: '^#listen_addresses = '
+    line: "listen_addresses = '{{ hostvars[inventory_hostname]['ansible_host'] }}'"
+  notify:
+        - restart postgresql
+  tags: [ postgres-config ]
+
+- name: change default port of postgresql
+  lineinfile:
+    path: /usr/local/pgsql/data/postgresql.conf
+    regexp: '^port ='
+    line: 'port = 5454'
+  notify:
+        - restart postgresql
+  tags: [ pg-port ]
+
+- name: Change PostgreSQL port in pg_hba.conf
+  lineinfile:
+    path: /usr/local/pgsql/data/pg_hba.conf
+    regexp: '^host\s+all\s+all\s+127\.0\.0\.1/32\s+md5'
+    line: 'host    all             all             0.0.0.0/0               md5'
+  notify:
+        - restart postgresql
+  tags: [ port-change-pghba ]
+
+- name: Install psycopg2
+  apt:
+    name: python3-psycopg2
+    state: present
+  tags: [ psy ]
+
+- name: create posgres database
+  postgresql_db:
+    name: "{{ item.name }}"
+    login_host: "{{ item.login_host }}"
+    login_port: "{{ item.port }}"
+    login_user: "{{ item.admin_user }}"
+    login_password: "{{ item.admin_password }}"
+    state: present
+  with_items: "{{ db }}"
+  tags: [ create-db ]
+#psql -h 172.31.0.126 -p 5454 -U thamin info
+#psql -h 172.31.0.126 -p 5454 -U <username> <database_name>
+
+- name: create postgres user
+  postgresql_user:
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    login_host: "{{ item.login_host }}"
+    login_port: "{{ item.port }}"
+    login_user: "{{ item.admin_user }}"
+    login_password: "{{ item.admin_password }}"
+    login_db: "{{ item.database }}"
+    state: present
+  with_items: "{{ db }}"
+  tags: [ create-db_user ]
+
+#######
+
+- name: install redis
+  apt:
+    update_cache: yes
+    name: redis-server
+    state: present
+  notify:
+    - start redis
+    - enable redis
+  tags: [ install-redis ]
+
+
+- name: redis-server config changes
+  lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^bind'
+    line: "bind {{ hostvars[inventory_hostname]['ansible_host'] }}"
+  tags: [ redis-config ]
+
+- name: redis password
+  lineinfile:
+    path: /etc/redis/redis.conf
+    line: "{{ item }}"
+  with_items: "{{ redis_password }}"
+  tags: [ redis-pass ]
+
+######
+
+- name: install rabbitmq
+  apt:
+    update_cache: yes
+    name: rabbitmq-server
+  notify:
+    - start rabbitmq
+    - enable rabbitmq
+  tags: [ install-rabbitmq ]
+
+- name: creating user in rabbitmq
+  rabbitmq_user:
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    tags: "administrator"
+    vhost: "{{ item.vhost }}"
+  with_items: "{{ rabbitmq }}"
+  tags: [ rabbitmq-user ]
+
+- name: rabbitmq config
+  lineinfile:
+    path: /etc/rabbitmq/rabbitmq-env.conf
+    regexp: '{{ item.old }}'
+    line: "{{ item.new }}"
+  with_items: "{{ rabbitmq_config }}"
+  tags: [ rabbitmq-config ]
+
+- name: Declare a RabbitMQ Queue
+  rabbitmq_queue:
+    name: "{{ item.queue }}"
+    vhost: "{{ item.vhost }}"
+    login_host: "{{hostvars[inventory_hostname]['ansible_host'] }}"
+    durable: yes
+    state: present
+  with_items: "{{ rabbitmq }}"
+  tags: [ rabbitmq-queue ]
+
+- name: Declare a RabbitMQ exchange
+  rabbitmq_exchange:
+    name: "{{ item.exchange }}"
+    vhost: "{{ item.vhost }}"
+    login_host: "{{hostvars[inventory_hostname]['ansible_host'] }}"
+    durable: yes
+    state: present
+  with_items: "{{ rabbitmq }}"
+  tags: [ rabbitmq-exchange ]
+
+######
+
+- name: transfer elastic file
+  copy:
+    src: elasticsearch-8.12.0-amd64.deb
+    dest: /home/ansible/scripts
+    mode: 0777
+  tags: [ transfer-el-file ]
+
+- name: transfer elasticsearch
+  copy:
+    src: elasticsearch.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-elasticsearch ]
+
+- name: install elasticsearch
+  apt:
+    deb: /home/ansible/scripts/elasticsearch-8.12.0-amd64.deb
+    state: present
+  notify:
+    - start elastic
+    - enable elastic
+  tags: [ install-elasticsearch ]
+
+- name: elasticsearch config changes
+  lineinfile:
+    path: /etc/elasticsearch/elasticsearch.yml
+    regexp: '^#network.host: 192.168.0.1'
+    line: "network.host: {{ hostvars[inventory_hostname]['ansible_host'] }}"
+  notify:
+    - restart elastic
+  tags: [ elastic-config ]
+
+- name: elasticsearch config changes
+  lineinfile:
+    path: /etc/elasticsearch/jvm.options
+    regexp: '^## -Xms4g'
+    line: '-Xms2g'
+  notify:
+    - restart elastic
+  tags: [ elastic-config2 ]
+
+- name: elastic password
+  shell: >
+    curl -X POST "http://172.31.0.126:9200/_security/user/elastic/_password"
+    -H 'Content-Type: application/json'
+    -d '{"password": "qazwsx"}'
+  tags: [elastic_pass]
+  notify:
+    - restart elastic
+  tags: [ user ]

@@ -1,0 +1,50 @@
+---
+- name: transfer prometheus file
+  copy:
+    src: prometheus-installation.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-prometheus ]
+
+- name: install prometheus
+  command: /home/ansible/scripts/prometheus-installation.sh
+  tags: [ install-prometheus ]
+
+- name: config change in prometheus.yml
+  lineinfile:
+    path: /etc/prometheus/prometheus.yml  # Replace with the actual path to your Prometheus configuration file
+    regexp: '^(\s+- targets:\s+)\["localhost:9090"\]'
+    line: '      - targets: ["ip:port"]'
+  notify: restart prometheus
+  tags: [ prometheus-config ]
+
+- name: transfer node-exporter
+  copy:
+    src: node_exporter.sh
+    dest: /home/ansible/scripts/
+    mode: 0777
+  tags: [ transfer-node_exporter ]
+
+- name: install node-exporter
+  command: /home/ansible/scripts/node_exporter.sh
+  tags: [ install-node_exporter ]
+
+- name: node_exporter port change
+  lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    regexp: '^#  --web.listen-address=":9100"'
+    line: '  --web.listen-address=":9101"'
+  notify: restart node_exporter
+  tags: [ ne-config ]
+
+- name: add node_exporter job to prometheus.yml
+  lineinfile:
+    path: /etc/prometheus/prometheus.yml
+    line: |
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['ip:port']
+    state: present
+  notify: restart prometheus
+  tags: [ prometheus-job ]
+

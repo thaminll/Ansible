@@ -1,0 +1,64 @@
+---
+- name: restart prometheus
+  service:
+    name: prometheus.service
+    state: restarted
+
+- name: restart postgresql
+  service:
+    name: postgresql.service 
+    state: restarted
+
+- name: Restart ssh service
+  service:
+    name: sshd
+    state: restarted
+
+- name: restart node_exporter
+  service:
+    name: node_exporter.service
+    state: restarted
+
+- name: start redis
+  service:
+    name: redis-server
+    state: started
+
+- name: enable redis
+  service:
+    name: redis-server
+    enabled: yes
+
+- name: start rabbitmq
+  service:
+    name: rabbitmq-server
+    state: started
+- name: enable rabbitmq
+  service:
+    name: rabbitmq-server
+    enabled: yes
+
+- name: start elastic
+  service:
+    name: elasticsearch.service
+    state: start
+
+- name: enable elastic
+  service:
+    name: elasticsearch.service
+    enabled: yes
+
+- name: restart elastic
+  service:
+    name: elasticsearch.service
+    state: restarted
+
+- name: restart kafka
+  service:
+    name: kafka.service
+    state: restarted
+
+- name: restart zookeeper
+  service:
+    name: zookeeper.service
+    state: restarted
