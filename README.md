@@ -2,10 +2,10 @@
 
 ### Add SSH key
 #### run these commands to add ssh key :
+>
+>ssh-keygen
 
-ssh-keygen
-
-ssh-copy-id -i ~/.ssh/id_rsa.pub user@[target_server]
+>ssh-copy-id -i ~/.ssh/id_rsa.pub user@[target_server]
 
 ## Description
 
@@ -44,6 +44,10 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub user@[target_server]
   - Set up Kafka with at least 3 nodes.
 
 ## Run Playbook
+
+> ansible-playbook -i [invemntory/hostfiles] playbook.yml
+
+>  --tags [specific task] --limits [host]
 
 ansible-playbook -i [invemntory/hostfiles] playbook.yml
 
